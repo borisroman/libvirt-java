@@ -1254,7 +1254,7 @@ public class Domain {
      * @throws LibvirtException
      */
     public int revertToSnapshot(DomainSnapshot snapshot) throws LibvirtException {
-        return processError(libvirt.virDomainRevertToSnapshot(snapshot.VDSP, 0));
+        return processError(libvirt.virDomainRevertToSnapshot(snapshot.virDomainSnapshotPtr, 0));
     }
 
     /**

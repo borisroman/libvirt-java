@@ -31,7 +31,7 @@ public class DomainSnapshot {
                                                                                while the guest is
                                                                                running */
     }
-    
+
     /**
      * virDomainSnapshotListFlags:
      *
@@ -42,7 +42,7 @@ public class DomainSnapshot {
      * of flag (1<<0) depends on which function it is passed to; but serves
      * to toggle the per-call default of whether the listing is shallow or
      * recursive.  Remaining bits come in groups; if all bits from a group are
-     * 0, then that group is not used to filter results.  
+     * 0, then that group is not used to filter results.
      */
     static final class virDomainSnapshotListFlags {
         static final int VIR_DOMAIN_SNAPSHOT_LIST_ROOTS       = (1 << 0); /* Filter by snapshots
@@ -80,7 +80,7 @@ public class DomainSnapshot {
                                                             that use files external
                                                             to disk images */
     }
-    
+
 
     static final class virDomainSnapshotRevertFlags {
         static final int VIR_DOMAIN_SNAPSHOT_REVERT_RUNNING = (1 << 0); /* Run after revert */
@@ -101,15 +101,15 @@ public class DomainSnapshot {
     /**
      * the native virDomainSnapshotPtr.
      */
-    DomainSnapshotPointer VDSP;
+    DomainSnapshotPointer virDomainSnapshotPtr;
 
     /**
      * The Connect Object that represents the Hypervisor of this Domain Snapshot
      */
     private Connect virConnect;
 
-    public DomainSnapshot(Connect virConnect, DomainSnapshotPointer VDSP) {
-        this.VDSP = VDSP;
+    public DomainSnapshot(Connect virConnect, DomainSnapshotPointer virDomainSnapshotPtr) {
+        this.virDomainSnapshotPtr = virDomainSnapshotPtr;
         this.virConnect = virConnect;
     }
 
@@ -126,9 +126,9 @@ public class DomainSnapshot {
      */
     public int delete(int flags) throws LibvirtException {
         int success = 0;
-        if (VDSP != null) {
-            success = processError(libvirt.virDomainSnapshotDelete(VDSP, flags));
-            VDSP = null;
+        if (virDomainSnapshotPtr != null) {
+            success = processError(libvirt.virDomainSnapshotDelete(virDomainSnapshotPtr, flags));
+            virDomainSnapshotPtr = null;
         }
 
         return success;
@@ -148,9 +148,9 @@ public class DomainSnapshot {
      */
     public int free() throws LibvirtException {
         int success = 0;
-        if (VDSP != null) {
-            success = processError(libvirt.virDomainSnapshotFree(VDSP));
-            VDSP = null;
+        if (virDomainSnapshotPtr != null) {
+            success = processError(libvirt.virDomainSnapshotFree(virDomainSnapshotPtr));
+            virDomainSnapshotPtr = null;
         }
 
         return success;
@@ -163,6 +163,6 @@ public class DomainSnapshot {
      * @return the XML document
      */
     public String getXMLDesc() throws LibvirtException {
-        return processError(libvirt.virDomainSnapshotGetXMLDesc(VDSP, 0)).toString();
+        return processError(libvirt.virDomainSnapshotGetXMLDesc(virDomainSnapshotPtr, 0)).toString();
     }
 }
