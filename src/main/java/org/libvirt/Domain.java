@@ -1384,7 +1384,7 @@ public class Domain {
      */
     public DomainSnapshot snapshotCreateXML(String xmlDesc, int flags) throws LibvirtException {
         DomainSnapshotPointer ptr = processError(libvirt.virDomainSnapshotCreateXML(VDP, xmlDesc, flags));
-        return new DomainSnapshot(virConnect, ptr);
+        return new DomainSnapshot(ptr);
     }
 
     /**
@@ -1418,7 +1418,7 @@ public class Domain {
      */
     public DomainSnapshot snapshotCurrent() throws LibvirtException {
         DomainSnapshotPointer ptr = processError(libvirt.virDomainSnapshotCurrent(VDP, 0));
-        return new DomainSnapshot(virConnect, ptr);
+        return new DomainSnapshot(ptr);
     }
 
     /**
@@ -1472,7 +1472,7 @@ public class Domain {
      */
     public DomainSnapshot snapshotLookupByName(String name) throws LibvirtException {
         DomainSnapshotPointer ptr = processError(libvirt.virDomainSnapshotLookupByName(VDP, name, 0));
-        return new DomainSnapshot(virConnect, ptr);
+        return new DomainSnapshot(ptr);
     }
 
     /**

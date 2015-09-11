@@ -103,14 +103,8 @@ public class DomainSnapshot {
      */
     DomainSnapshotPointer virDomainSnapshotPtr;
 
-    /**
-     * The Connect Object that represents the Hypervisor of this Domain Snapshot
-     */
-    private Connect virConnect;
-
-    public DomainSnapshot(Connect virConnect, DomainSnapshotPointer virDomainSnapshotPtr) {
+    public DomainSnapshot(DomainSnapshotPointer virDomainSnapshotPtr) {
         this.virDomainSnapshotPtr = virDomainSnapshotPtr;
-        this.virConnect = virConnect;
     }
 
     /**
