@@ -1,9 +1,18 @@
 package org.libvirt;
 
+import static org.libvirt.ErrorHandler.processError;
+import static org.libvirt.ErrorHandler.processErrorIfZero;
+import static org.libvirt.Library.libvirt;
+
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 import org.libvirt.event.IOErrorListener;
+import org.libvirt.event.LifecycleListener;
+import org.libvirt.event.PMSuspendListener;
+import org.libvirt.event.PMWakeupListener;
+import org.libvirt.event.RebootListener;
 import org.libvirt.jna.CString;
 import org.libvirt.jna.DomainPointer;
 import org.libvirt.jna.DomainSnapshotPointer;
@@ -17,20 +26,10 @@ import org.libvirt.jna.virDomainJobInfo;
 import org.libvirt.jna.virDomainMemoryStats;
 import org.libvirt.jna.virSchedParameter;
 import org.libvirt.jna.virVcpuInfo;
-import org.libvirt.event.RebootListener;
-import org.libvirt.event.LifecycleListener;
-import org.libvirt.event.PMWakeupListener;
-import org.libvirt.event.PMSuspendListener;
-import static org.libvirt.Library.libvirt;
-import static org.libvirt.ErrorHandler.processError;
-import static org.libvirt.ErrorHandler.processErrorIfZero;
 
 import com.sun.jna.Native;
 import com.sun.jna.NativeLong;
-import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
-
-import java.util.Arrays;
 
 /**
  * A virtual machine defined within libvirt.
@@ -76,87 +75,1564 @@ public class Domain {
         VIR_DOMAIN_NOSTATE_UNKNOWN
     }
 
-    public static final class BlockResizeFlags {
+    public static enum virDomainRunningReason {
         /**
-         * size is in bytes instead of KiB
+         * unknown running state
          */
-        public static final int BYTES = 1;
+        VIR_DOMAIN_RUNNING_UNKNOWN,
+        /**
+         *  normal startup from boot
+         */
+        VIR_DOMAIN_RUNNING_BOOTED,
+        /**
+         *  migrated from another host
+         */
+        VIR_DOMAIN_RUNNING_MIGRATED,
+        /**
+         * restored from a state file
+         */
+        VIR_DOMAIN_RUNNING_RESTORED,
+        /**
+         * restored from snapshot
+         */
+        VIR_DOMAIN_RUNNING_FROM_SNAPSHOT,
+        /**
+         * returned from paused state
+         */
+        VIR_DOMAIN_RUNNING_UNPAUSED,
+        /**
+         * returned from migration
+         */
+        VIR_DOMAIN_RUNNING_MIGRATION_CANCELED,
+        /**
+         * returned from failed save process
+         */
+        VIR_DOMAIN_RUNNING_SAVE_CANCELED,
+        /**
+         * returned from pmsuspended due to wakeup event
+         */
+        VIR_DOMAIN_RUNNING_WAKEUP,
+        /**
+         * resumed from crashed
+         */
+        VIR_DOMAIN_RUNNING_CRASHED
     }
 
-    static final class MigrateFlags {
-        static final int VIR_MIGRATE_LIVE              = (1 << 0); /* live migration */
-        static final int VIR_MIGRATE_PEER2PEER         = (1 << 1); /* direct source -> dest host control channel */
-        /* Note the less-common spelling that we're stuck with:
-           VIR_MIGRATE_TUNNELLED should be VIR_MIGRATE_TUNNELED */
-        static final int VIR_MIGRATE_TUNNELLED         = (1 << 2); /* tunnel migration data over libvirtd connection */
-        static final int VIR_MIGRATE_PERSIST_DEST      = (1 << 3); /* persist the VM on the destination */
-        static final int VIR_MIGRATE_UNDEFINE_SOURCE   = (1 << 4); /* undefine the VM on the source */
-        static final int VIR_MIGRATE_PAUSED            = (1 << 5); /* pause on remote side */
-        static final int VIR_MIGRATE_NON_SHARED_DISK   = (1 << 6); /* migration with non-shared storage with full disk copy */
-        static final int VIR_MIGRATE_NON_SHARED_INC    = (1 << 7); /* migration with non-shared storage with incremental copy */
-                                                                   /* (same base image shared between source and destination) */
-        static final int VIR_MIGRATE_CHANGE_PROTECTION = (1 << 8); /* protect for changing domain configuration through the
-                                                                    * whole migration process; this will be used automatically
-                                                                    * when supported */
-        static final int VIR_MIGRATE_UNSAFE            = (1 << 9); /* force migration even if it is considered unsafe */
+    public static enum virDomainBlockedReason {
+        /**
+         * the reason is unknown
+         */
+        VIR_DOMAIN_BLOCKED_UNKNOWN
     }
 
-    static final class XMLFlags {
+    public static enum virDomainPausedReason {
+        /**
+         * the reason is unknown
+         */
+        VIR_DOMAIN_PAUSED_UNKNOWN,
+        /**
+         * paused on user request
+         */
+        VIR_DOMAIN_PAUSED_USER,
+        /**
+         * paused for offline migration
+         */
+        VIR_DOMAIN_PAUSED_MIGRATION,
+        /**
+         * paused for save
+         */
+        VIR_DOMAIN_PAUSED_SAVE,
+        /**
+         * paused for offline core dump
+         */
+        VIR_DOMAIN_PAUSED_DUMP,
+        /**
+         * paused due to a disk I/O error
+         */
+        VIR_DOMAIN_PAUSED_IOERROR,
+        /**
+         * paused due to a watchdog event
+         1*/
+        VIR_DOMAIN_PAUSED_WATCHDOG,
+        /**
+         * paused after restoring from snapshot
+         */
+        VIR_DOMAIN_PAUSED_FROM_SNAPSHOT,
+        /**
+         * paused during shutdown process
+         */
+        VIR_DOMAIN_PAUSED_SHUTTING_DOWN,
+        /**
+         * paused while creating a snapshot
+         */
+        VIR_DOMAIN_PAUSED_SNAPSHOT,
+        /**
+         * paused due to a guest crash
+         */
+        VIR_DOMAIN_PAUSED_CRASHED,
+        /**
+         * the domain is being started
+         */
+        VIR_DOMAIN_PAUSED_STARTING_UP
+    }
+
+    public static enum virDomainShutdownReason {
+        /**
+         * the reason is unknown
+         */
+        VIR_DOMAIN_SHUTDOWN_UNKNOWN,
+        /**
+         * shutting down on user request
+         */
+        VIR_DOMAIN_SHUTDOWN_USER
+    }
+
+    public static enum virDomainShutoffReason {
+        /**
+         * the reason is unknown
+         */
+        VIR_DOMAIN_SHUTOFF_UNKNOWN,
+        /**
+         * normal shutdown
+         */
+        VIR_DOMAIN_SHUTOFF_SHUTDOWN,
+        /**
+         * forced poweroff
+         */
+        VIR_DOMAIN_SHUTOFF_DESTROYED,
+        /**
+         * domain crashed
+         */
+        VIR_DOMAIN_SHUTOFF_CRASHED,
+        /**
+         * migrated to another host
+         */
+        VIR_DOMAIN_SHUTOFF_MIGRATED,
+        /**
+         * saved to a file
+         */
+        VIR_DOMAIN_SHUTOFF_SAVED,
+        /**
+         * domain failed to start
+         */
+        VIR_DOMAIN_SHUTOFF_FAILED,
+        /**
+         * restored from a snapshot which was taken while domain was shutoff
+         */
+        VIR_DOMAIN_SHUTOFF_FROM_SNAPSHOT
+
+    }
+
+    public static enum virDomainCrashedReason {
+        /**
+         * crashed for unknown reason
+         */
+        VIR_DOMAIN_CRASHED_UNKNOWN,
+        /**
+         * domain panicked
+         */
+        VIR_DOMAIN_CRASHED_PANICKED
+    }
+
+    public static enum virDomainPMSuspendedReason {
+        VIR_DOMAIN_PMSUSPENDED_UNKNOWN
+    }
+
+    public static enum virDomainPMSuspendedDiskReason {
+        VIR_DOMAIN_PMSUSPENDED_DISK_UNKNOWN
+    }
+
+    public static enum virDomainControlState {
+        /**
+         * operational, ready to accept commands
+         */
+        VIR_DOMAIN_CONTROL_OK,
+        /**
+         * background job is running (can be
+         * monitored by virDomainGetJobInfo); only
+         * limited set of commands may be allowed
+         */
+        VIR_DOMAIN_CONTROL_JOB,
+        /**
+         * occupied by a running command
+         */
+        VIR_DOMAIN_CONTROL_OCCUPIED,
+        /**
+         * unusable, domain cannot be fully operated,
+         * possible reason is provided in the details field
+         */
+        VIR_DOMAIN_CONTROL_ERROR,
+    }
+
+    public static enum virDomainControlErrorReason {
+        /**
+         * server didn't provide a reason
+         */
+        VIR_DOMAIN_CONTROL_ERROR_REASON_NONE,
+        /**
+         * unknown reason for the error
+         */
+        VIR_DOMAIN_CONTROL_ERROR_REASON_UNKNOWN,
+        /**
+         * monitor connection is broken
+         */
+        VIR_DOMAIN_CONTROL_ERROR_REASON_MONITOR,
+        /**
+         * error caused due to internal failure in libvirt
+         */
+        VIR_DOMAIN_CONTROL_ERROR_REASON_INTERNAL
+    }
+
+    public static final class virDomainModificationImpact {
+        /**
+         * Affect current domain state.
+         */
+        static final int VIR_DOMAIN_AFFECT_CURRENT = 0;
+        /**
+         * Affect running domain state.
+         */
+        static final int VIR_DOMAIN_AFFECT_LIVE    = (1 << 0);
+        /**
+         * Affect persistent domain state.
+         */
+        static final int VIR_DOMAIN_AFFECT_CONFIG  = (1 << 1);
+        /**
+         * 1 << 2 is reserved for virTypedParameterFlags
+         */
+    }
+
+    public static final class virDomainCreateFlags {
+        /**
+         * Default behavior
+         */
+        static final int VIR_DOMAIN_NONE               = 0;
+        /**
+         * Launch guest in paused state
+         */
+        static final int VIR_DOMAIN_START_PAUSED       = (1 << 0);
+        /**
+         * Automatically kill guest when virConnectPtr is closed
+         */
+        static final int VIR_DOMAIN_START_AUTODESTROY  = (1 << 1);
+        /**
+         * Avoid file system cache pollution
+         */
+        static final int VIR_DOMAIN_START_BYPASS_CACHE = (1 << 2);
+        /**
+         * Boot, discarding any managed save
+         */
+        static final int VIR_DOMAIN_START_FORCE_BOOT   = (1 << 3);
+        /**
+         * Validate the XML document against schema
+         */
+        static final int VIR_DOMAIN_START_VALIDATE     = (1 << 4);
+    }
+
+    public static enum virDomainMemoryStatTags {
+        /**
+         * The total amount of data read from swap space (in kB).
+         */
+        VIR_DOMAIN_MEMORY_STAT_SWAP_IN,
+        /**
+         * The total amount of memory written out to swap space (in kB).
+         */
+        VIR_DOMAIN_MEMORY_STAT_SWAP_OUT,
+        /**
+         * Page faults occur when a process makes a valid access to virtual memory
+         * that is not available.  When servicing the page fault, if disk IO is
+         * required, it is considered a major fault.  If not, it is a minor fault.
+         * These are expressed as the number of faults that have occurred.
+         */
+        VIR_DOMAIN_MEMORY_STAT_MAJOR_FAULT,
+        VIR_DOMAIN_MEMORY_STAT_MINOR_FAULT,
+        /**
+         * The amount of memory left completely unused by the system.  Memory that
+         * is available but used for reclaimable caches should NOT be reported as
+         * free.  This value is expressed in kB.
+         */
+        VIR_DOMAIN_MEMORY_STAT_UNUSED,
+        /**
+         * The total amount of usable memory as seen by the domain.  This value
+         * may be less than the amount of memory assigned to the domain if a
+         * balloon driver is in use or if the guest OS does not initialize all
+         * assigned pages.  This value is expressed in kB.
+         */
+        VIR_DOMAIN_MEMORY_STAT_AVAILABLE,
+        /**
+         * Current balloon value (in KB).
+         */
+        VIR_DOMAIN_MEMORY_STAT_ACTUAL_BALLOON,
+        /**
+         * Resident Set Size of the process running the domain. This value is in kB
+         */
+        VIR_DOMAIN_MEMORY_STAT_RSS,
+        /**
+         * The number of statistics supported by this version of the interface.
+         * To add new statistics, add them to the enum and increase this value.
+         */
+        VIR_DOMAIN_MEMORY_STAT_NR
+    }
+
+    public static final class virDomainCoreDumpFlags {
+        /**
+         * crash after dump
+         */
+        static final int VIR_DUMP_CRASH        = (1 << 0);
+        /**
+         * live dump
+         */
+        static final int VIR_DUMP_LIVE         = (1 << 1);
+        /**
+         * avoid file system cache pollution
+         */
+        static final int VIR_DUMP_BYPASS_CACHE = (1 << 2);
+        /**
+         * reset domain after dump finishes
+         */
+        static final int VIR_DUMP_RESET        = (1 << 3);
+        /**
+         * use dump-guest-memory
+         */
+        static final int VIR_DUMP_MEMORY_ONLY  = (1 << 4);
+    }
+
+
+    public static enum virDomainCoreDumpFormat {
+        /**
+         * dump guest memory in raw format
+         */
+        VIR_DOMAIN_CORE_DUMP_FORMAT_RAW,
+        /**
+         * kdump-compressed format, with zlib compression
+         */
+        VIR_DOMAIN_CORE_DUMP_FORMAT_KDUMP_ZLIB,
+        /**
+         * kdump-compressed format, with lzo compression
+         */
+        VIR_DOMAIN_CORE_DUMP_FORMAT_KDUMP_LZO,
+        /**
+         * kdump-compressed format, with snappy compression
+         */
+        VIR_DOMAIN_CORE_DUMP_FORMAT_KDUMP_SNAPPY
+    }
+
+    public static final class virDomainMigrateFlags {
+        /**
+         * live migration
+         */
+        static final int VIR_MIGRATE_LIVE              = (1 << 0);
+        /**
+         * direct source -> dest host control channel
+         */
+        static final int VIR_MIGRATE_PEER2PEER         = (1 << 1);
+        /**
+         * Note the less-common spelling that we're stuck with:
+         * VIR_MIGRATE_TUNNELLED should be VIR_MIGRATE_TUNNELED
+         *
+         * tunnel migration data over libvirtd connection
+         */
+        static final int VIR_MIGRATE_TUNNELLED         = (1 << 2);
+        /**
+         * persist the VM on the destination
+         */
+        static final int VIR_MIGRATE_PERSIST_DEST      = (1 << 3);
+        /**
+         * undefine the VM on the source
+         */
+        static final int VIR_MIGRATE_UNDEFINE_SOURCE   = (1 << 4);
+        /**
+         * pause on remote side
+         */
+        static final int VIR_MIGRATE_PAUSED            = (1 << 5);
+        /**
+         * migration with non-shared storage with full disk copy
+         */
+        static final int VIR_MIGRATE_NON_SHARED_DISK   = (1 << 6);
+        /**
+         * migration with non-shared storage with incremental copy
+         * (same base image shared between source and destination)
+         */
+        static final int VIR_MIGRATE_NON_SHARED_INC    = (1 << 7);
+        /**
+         * protect for changing domain configuration through the
+         * whole migration process; this will be used automatically
+         * when supported
+         */
+        static final int VIR_MIGRATE_CHANGE_PROTECTION = (1 << 8);
+        /**
+         * force migration even if it is considered unsafe
+         */
+        static final int VIR_MIGRATE_UNSAFE            = (1 << 9);
+    }
+
+    public static final class virDomainShutdownFlagValues {
+        /**
+         * hypervisor choice
+         */
+        static final int VIR_DOMAIN_SHUTDOWN_DEFAULT        = 0;
+        /**
+         * Send ACPI event
+         */
+        static final int VIR_DOMAIN_SHUTDOWN_ACPI_POWER_BTN = (1 << 0);
+        /**
+         * Use guest agent
+         */
+        static final int VIR_DOMAIN_SHUTDOWN_GUEST_AGENT    = (1 << 1);
+        /**
+         * Use initctl
+         */
+        static final int VIR_DOMAIN_SHUTDOWN_INITCTL        = (1 << 2);
+        /**
+         * Send a signal
+         */
+        static final int VIR_DOMAIN_SHUTDOWN_SIGNAL         = (1 << 3);
+        /**
+         * Use paravirt guest control
+         */
+        static final int VIR_DOMAIN_SHUTDOWN_PARAVIRT       = (1 << 4);
+    }
+
+    public static final class virDomainRebootFlagValues {
+        /**
+         * hypervisor choice
+         */
+        static final int VIR_DOMAIN_REBOOT_DEFAULT        = 0;
+        /**
+         * Send ACPI event
+         */
+        static final int VIR_DOMAIN_REBOOT_ACPI_POWER_BTN = (1 << 0);
+        /**
+         * Use guest agent
+         */
+        static final int VIR_DOMAIN_REBOOT_GUEST_AGENT    = (1 << 1);
+        /**
+         * Use initctl
+         */
+        static final int VIR_DOMAIN_REBOOT_INITCTL        = (1 << 2);
+        /**
+         * Send a signal
+         */
+        static final int VIR_DOMAIN_REBOOT_SIGNAL         = (1 << 3);
+        /**
+         * Use paravirt guest control
+         */
+        static final int VIR_DOMAIN_REBOOT_PARAVIRT       = (1 << 4);
+    }
+
+    public static final class virDomainDestroyFlagsValues {
+        /**
+         * Default behavior - could lead to data loss!!
+         */
+        static final int VIR_DOMAIN_DESTROY_DEFAULT  = 0;
+        /**
+         * only SIGTERM, no SIGKILL
+         */
+        static final int VIR_DOMAIN_DESTROY_GRACEFUL = (1 << 0);
+    }
+
+    public static final class virDomainSaveRestoreFlags {
+        /**
+         * Avoid file system cache pollution
+         */
+        static final int VIR_DOMAIN_SAVE_BYPASS_CACHE = (1 << 0);
+        /**
+         * Favor running over paused
+         */
+        static final int VIR_DOMAIN_SAVE_RUNNING      = (1 << 1);
+        /**
+         * Favor paused over running
+         */
+        static final int VIR_DOMAIN_SAVE_PAUSED       = (1 << 2);
+    }
+
+    public static final class virDomainMemoryModFlags {
+        /**
+         * See virDomainModificationImpact for these flags.
+         */
+        static final int VIR_DOMAIN_MEM_CURRENT = virDomainModificationImpact.VIR_DOMAIN_AFFECT_CURRENT;
+        static final int VIR_DOMAIN_MEM_LIVE    = virDomainModificationImpact.VIR_DOMAIN_AFFECT_LIVE;
+        static final int VIR_DOMAIN_MEM_CONFIG  = virDomainModificationImpact.VIR_DOMAIN_AFFECT_CONFIG;
+
+        /**
+         * affect Max rather than current
+         */
+        static final int VIR_DOMAIN_MEM_MAXIMUM = (1 << 2);
+    }
+
+    public static enum virDomainNumatuneMemMode {
+        VIR_DOMAIN_NUMATUNE_MEM_STRICT,
+        VIR_DOMAIN_NUMATUNE_MEM_PREFERRED,
+        VIR_DOMAIN_NUMATUNE_MEM_INTERLEAVE
+    }
+
+    public static enum virDomainMetadataType {
+        /**
+         * Operate on <description>
+         */
+        VIR_DOMAIN_METADATA_DESCRIPTION,
+        /**
+         * Operate on <title>
+         */
+        VIR_DOMAIN_METADATA_TITLE,
+        /**
+         * Operate on <metadata>
+         */
+        VIR_DOMAIN_METADATA_ELEMENT
+    }
+
+    public static final class virDomainXMLFlags {
         /**
          * dump security sensitive information too
          */
-        static final int VIR_DOMAIN_XML_SECURE = 1;
+        static final int VIR_DOMAIN_XML_SECURE     = (1 << 0);
         /**
          * dump inactive domain information
          */
-        static final int VIR_DOMAIN_XML_INACTIVE = 2;
-        static final int VIR_DOMAIN_XML_UPDATE_CPU   = (1 << 2); /* update guest CPU requirements according to host CPU */
+        static final int VIR_DOMAIN_XML_INACTIVE   = (1 << 1);
+        /**
+         * update guest CPU requirements according to host CPU
+         */
+        static final int VIR_DOMAIN_XML_UPDATE_CPU = (1 << 2);
+        /**
+         * dump XML suitable for migration
+         */
+        static final int VIR_DOMAIN_XML_MIGRATABLE = (1 << 3);
     }
 
-    public static final class UndefineFlags {
+    public static final class virDomainBlockResizeFlags {
+        /**
+         * size is in bytes instead of KiB
+         */
+        public static final int BYTES = (1 << 0);
+    }
+
+    public static final class virDomainMemoryFlags {
+        /**
+         * addresses are virtual addresses
+         */
+        public static final int VIR_MEMORY_VIRTUAL  = (1 << 0);
+        /**
+         * addresses are physical addresses
+         */
+        public static final int VIR_MEMORY_PHYSICAL = (1 << 1);
+    }
+
+    public static final class virDomainDefineFlags {
+        /**
+         * Validate the XML document against schema
+         */
+        public static final int VIR_DOMAIN_DEFINE_VALIDATE = (1 << 0);
+    }
+
+    public static final class virDomainUndefineFlagsValues {
         /**
          * Also remove any managed save
          */
-        public static final int MANAGED_SAVE = (1 << 0);
+        public static final int VIR_DOMAIN_UNDEFINE_MANAGED_SAVE       = (1 << 0);
         /**
          * If last use of domain, then also remove any snapshot metadata
          */
-        public static final int SNAPSHOTS_METADATA = (1 << 1);
+        public static final int VIR_DOMAIN_UNDEFINE_SNAPSHOTS_METADATA = (1 << 1);
+        /**
+         * Also remove any nvram file
+         */
+        public static final int VIR_DOMAIN_UNDEFINE_NVRAM              = (1 << 2);
     }
 
-    public static final class SnapshotListFlags {
-        /**
-         * Filter by snapshots with no parents, when listing a domain
-         */
-        public static final int ROOTS       = (1 << 0);
-
-        /**
-         * List all descendants, not just children, when listing a snapshot
-         */
-        public static final int DESCENDANTS = (1 << 0);
-
-        /** For historical reasons, groups do not use contiguous bits. */
-
-        /**
-         * Filter by snapshots with no children
-         */
-        public static final int LEAVES      = (1 << 2);
-
-        /**
-         * Filter by snapshots that have children
-         */
-        public static final int NO_LEAVES   = (1 << 3);
-
-        /**
-         * Filter by snapshots which have metadata
-         */
-        public static final int METADATA    = (1 << 1);
-
-        /**
-         * Filter by snapshots with no metadata
-         */
-        public static final int NO_METADATA = (1 << 4);
+    public static final class virConnectListAllDomainsFlags {
+        public static final int VIR_CONNECT_LIST_DOMAINS_ACTIVE         = (1 << 0);
+        public static final int VIR_CONNECT_LIST_DOMAINS_INACTIVE       = (1 << 1);
+        public static final int VIR_CONNECT_LIST_DOMAINS_PERSISTENT     = (1 << 2);
+        public static final int VIR_CONNECT_LIST_DOMAINS_TRANSIENT      = (1 << 3);
+        public static final int VIR_CONNECT_LIST_DOMAINS_RUNNING        = (1 << 4);
+        public static final int VIR_CONNECT_LIST_DOMAINS_PAUSED         = (1 << 5);
+        public static final int VIR_CONNECT_LIST_DOMAINS_SHUTOFF        = (1 << 6);
+        public static final int VIR_CONNECT_LIST_DOMAINS_OTHER          = (1 << 7);
+        public static final int VIR_CONNECT_LIST_DOMAINS_MANAGEDSAVE    = (1 << 8);
+        public static final int VIR_CONNECT_LIST_DOMAINS_NO_MANAGEDSAVE = (1 << 9);
+        public static final int VIR_CONNECT_LIST_DOMAINS_AUTOSTART      = (1 << 10);
+        public static final int VIR_CONNECT_LIST_DOMAINS_NO_AUTOSTART   = (1 << 11);
+        public static final int VIR_CONNECT_LIST_DOMAINS_HAS_SNAPSHOT   = (1 << 12);
+        public static final int VIR_CONNECT_LIST_DOMAINS_NO_SNAPSHOT    = (1 << 13);
     }
+
+    public static enum virVcpuState {
+        /**
+         * the virtual CPU is offline
+         */
+        VIR_VCPU_OFFLINE,
+        /**
+         * the virtual CPU is running
+         */
+        VIR_VCPU_RUNNING,
+        /**
+         * the virtual CPU is blocked on resource
+         */
+        VIR_VCPU_BLOCKED
+    }
+
+    public static final class virDomainVcpuFlags {
+        /**
+         * See virDomainModificationImpact for these flags.
+         */
+        public static final int VIR_DOMAIN_VCPU_CURRENT = virDomainModificationImpact.VIR_DOMAIN_AFFECT_CURRENT;
+        public static final int VIR_DOMAIN_VCPU_LIVE    = virDomainModificationImpact.VIR_DOMAIN_AFFECT_LIVE;
+        public static final int VIR_DOMAIN_VCPU_CONFIG  = virDomainModificationImpact.VIR_DOMAIN_AFFECT_CONFIG;
+
+        /**
+         * Max rather than current count
+         */
+        public static final int VIR_DOMAIN_VCPU_MAXIMUM = (1 << 2);
+        /**
+         * Modify state of the cpu in the guest
+         */
+        public static final int VIR_DOMAIN_VCPU_GUEST   = (1 << 3);
+    }
+
+    public static final class virDomainDeviceModifyFlags {
+        /**
+         * See virDomainModificationImpact for these flags.
+         */
+        public static final int VIR_DOMAIN_DEVICE_MODIFY_CURRENT = virDomainModificationImpact.VIR_DOMAIN_AFFECT_CURRENT;
+        public static final int VIR_DOMAIN_DEVICE_MODIFY_LIVE    = virDomainModificationImpact.VIR_DOMAIN_AFFECT_LIVE;
+        public static final int VIR_DOMAIN_DEVICE_MODIFY_CONFIG  = virDomainModificationImpact.VIR_DOMAIN_AFFECT_CONFIG;
+
+        /**
+         * Forcibly modify device (ex. force eject a cdrom)
+         */
+        public static final int VIR_DOMAIN_DEVICE_MODIFY_FORCE = (1 << 2);
+    }
+
+    public static final class virDomainStatsTypes {
+        /**
+         * return domain state
+         */
+        public static final int VIR_DOMAIN_STATS_STATE     = (1 << 0);
+        /**
+         * return domain CPU info
+         */
+        public static final int VIR_DOMAIN_STATS_CPU_TOTAL = (1 << 1);
+        /**
+         * return domain balloon info
+         */
+        public static final int VIR_DOMAIN_STATS_BALLOON   = (1 << 2);
+        /**
+         * return domain virtual CPU info
+         */
+        public static final int VIR_DOMAIN_STATS_VCPU      = (1 << 3);
+        /**
+         * return domain interfaces info
+         */
+        public static final int VIR_DOMAIN_STATS_INTERFACE = (1 << 4);
+        /**
+         * return domain block info
+         */
+        public static final int VIR_DOMAIN_STATS_BLOCK     = (1 << 5);
+    }
+
+    public static final class virConnectGetAllDomainStatsFlags {
+        public static final int VIR_CONNECT_GET_ALL_DOMAINS_STATS_ACTIVE        = virConnectListAllDomainsFlags.VIR_CONNECT_LIST_DOMAINS_ACTIVE;
+        public static final int VIR_CONNECT_GET_ALL_DOMAINS_STATS_INACTIVE      = virConnectListAllDomainsFlags.VIR_CONNECT_LIST_DOMAINS_INACTIVE;
+        public static final int VIR_CONNECT_GET_ALL_DOMAINS_STATS_PERSISTENT    = virConnectListAllDomainsFlags.VIR_CONNECT_LIST_DOMAINS_PERSISTENT;
+        public static final int VIR_CONNECT_GET_ALL_DOMAINS_STATS_TRANSIENT     = virConnectListAllDomainsFlags.VIR_CONNECT_LIST_DOMAINS_TRANSIENT;
+        public static final int VIR_CONNECT_GET_ALL_DOMAINS_STATS_RUNNING       = virConnectListAllDomainsFlags.VIR_CONNECT_LIST_DOMAINS_RUNNING;
+        public static final int VIR_CONNECT_GET_ALL_DOMAINS_STATS_PAUSED        = virConnectListAllDomainsFlags.VIR_CONNECT_LIST_DOMAINS_PAUSED;
+        public static final int VIR_CONNECT_GET_ALL_DOMAINS_STATS_SHUTOFF       = virConnectListAllDomainsFlags.VIR_CONNECT_LIST_DOMAINS_SHUTOFF;
+        public static final int VIR_CONNECT_GET_ALL_DOMAINS_STATS_OTHER         = virConnectListAllDomainsFlags.VIR_CONNECT_LIST_DOMAINS_OTHER;
+        /**
+         * include backing chain for block stats
+         */
+        public static final int VIR_CONNECT_GET_ALL_DOMAINS_STATS_BACKING       = (1 << 30);
+        /**
+         * enforce requested stats
+         */
+        public static final int VIR_CONNECT_GET_ALL_DOMAINS_STATS_ENFORCE_STATS = (1 << 31);
+    }
+
+    public static enum virDomainBlockJobType {
+        VIR_DOMAIN_BLOCK_JOB_TYPE_UNKNOWN,
+        /**
+         * Block Pull (virDomainBlockPull, or virDomainBlockRebase without
+         * flags), job ends on completion
+         */
+        VIR_DOMAIN_BLOCK_JOB_TYPE_PULL,
+        /**
+         * Block Copy (virDomainBlockCopy, or virDomainBlockRebase with
+         * flags), job exists as long as mirroring is active
+         */
+        VIR_DOMAIN_BLOCK_JOB_TYPE_COPY,
+        /**
+         * Block Commit (virDomainBlockCommit without flags), job ends on
+         * completion
+         */
+        VIR_DOMAIN_BLOCK_JOB_TYPE_COMMIT,
+        /**
+         * Active Block Commit (virDomainBlockCommit with flags), job
+         * exists as long as sync is active
+         */
+        VIR_DOMAIN_BLOCK_JOB_TYPE_ACTIVE_COMMIT
+    }
+
+    public static final class virDomainBlockJobAbortFlags {
+        public static final int VIR_DOMAIN_BLOCK_JOB_ABORT_ASYNC = (1 << 0);
+        public static final int VIR_DOMAIN_BLOCK_JOB_ABORT_PIVOT = (1 << 1);
+    }
+
+    public static final class virDomainBlockJobInfoFlags {
+        /**
+         * bandwidth in bytes/s instead of MiB/s
+         */
+        public static final int VIR_DOMAIN_BLOCK_JOB_INFO_BANDWIDTH_BYTES = (1 << 0);
+    }
+
+    public static final class virDomainBlockJobSetSpeedFlags {
+        /**
+         * bandwidth in bytes/s instead of MiB/s
+         */
+        public static final int VIR_DOMAIN_BLOCK_JOB_SPEED_BANDWIDTH_BYTES = (1 << 0);
+    }
+
+    public static final class virDomainBlockPullFlags {
+        /**
+         * bandwidth in bytes/s instead of MiB/s
+         */
+        public static final int VIR_DOMAIN_BLOCK_PULL_BANDWIDTH_BYTES = (1 << 6);
+    }
+
+    public static final class virDomainBlockRebaseFlags {
+        /**
+         * Limit copy to top of source backing chain
+         */
+        public static final int VIR_DOMAIN_BLOCK_REBASE_SHALLOW         = (1 << 0);
+        /**
+         * Reuse existing external file for a copy
+         */
+        public static final int VIR_DOMAIN_BLOCK_REBASE_REUSE_EXT       = (1 << 1);
+        /**
+         * Make destination file raw
+         */
+        public static final int VIR_DOMAIN_BLOCK_REBASE_COPY_RAW        = (1 << 2);
+        /**
+         * Start a copy job
+         */
+        public static final int VIR_DOMAIN_BLOCK_REBASE_COPY            = (1 << 3);
+        /**
+         * Keep backing chain referenced using relative names
+         */
+        public static final int VIR_DOMAIN_BLOCK_REBASE_RELATIVE        = (1 << 4);
+        /**
+         * Treat destination as block device instead of file
+         */
+        public static final int VIR_DOMAIN_BLOCK_REBASE_COPY_DEV        = (1 << 5);
+        /**
+         * bandwidth in bytes/s instead of MiB/s
+         */
+        public static final int VIR_DOMAIN_BLOCK_REBASE_BANDWIDTH_BYTES = (1 << 6);
+    }
+
+    public static final class virDomainBlockCopyFlags {
+        /**
+         * Limit copy to top of source backing chain
+         */
+        public static final int VIR_DOMAIN_BLOCK_COPY_SHALLOW   = (1 << 0);
+        /**
+         * Reuse existing external file for a copy
+         */
+        public static final int VIR_DOMAIN_BLOCK_COPY_REUSE_EXT = (1 << 1);
+    }
+
+    public static final class virDomainBlockCommitFlags {
+        /**
+         * NULL base means next backing file, not whole chain
+         */
+        public static final int VIR_DOMAIN_BLOCK_COMMIT_SHALLOW         = (1 << 0);
+        /**
+         * Delete any files that are now invalid after their contents have been committed
+         */
+        public static final int VIR_DOMAIN_BLOCK_COMMIT_DELETE          = (1 << 1);
+        /**
+         * Allow a two-phase commit when top is the active layer
+         */
+        public static final int VIR_DOMAIN_BLOCK_COMMIT_ACTIVE          = (1 << 2);
+        /**
+         * keep the backing chain referenced using relative names
+         */
+        public static final int VIR_DOMAIN_BLOCK_COMMIT_RELATIVE        = (1 << 3);
+        /**
+         * bandwidth in bytes/s instead of MiB/s
+         */
+        public static final int VIR_DOMAIN_BLOCK_COMMIT_BANDWIDTH_BYTES = (1 << 4);
+    }
+
+    public static enum virDomainDiskErrorCode {
+        /**
+         * no error
+         */
+        VIR_DOMAIN_DISK_ERROR_NONE,
+        /**
+         * unspecified I/O error
+         */
+        VIR_DOMAIN_DISK_ERROR_UNSPEC,
+        /**
+         * no space left on the device
+         */
+        VIR_DOMAIN_DISK_ERROR_NO_SPACE
+    }
+
+    public static enum virKeycodeSet {
+        VIR_KEYCODE_SET_LINUX,
+        VIR_KEYCODE_SET_XT,
+        VIR_KEYCODE_SET_ATSET1,
+        VIR_KEYCODE_SET_ATSET2,
+        VIR_KEYCODE_SET_ATSET3,
+        VIR_KEYCODE_SET_OSX,
+        VIR_KEYCODE_SET_XT_KBD,
+        VIR_KEYCODE_SET_USB,
+        VIR_KEYCODE_SET_WIN32,
+        VIR_KEYCODE_SET_RFB
+    }
+
+    public static enum virDomainProcessSignal {
+        /**
+         * No constant in POSIX/Linux
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_NOP,
+        /**
+         * SIGHUP
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_HUP,
+        /**
+         * SIGINT
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_INT,
+        /**
+         * SIGQUIT
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_QUIT,
+        /**
+         * SIGILL
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_ILL,
+        /**
+         * SIGTRAP
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_TRAP,
+        /**
+         * SIGABRT
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_ABRT,
+        /**
+         * SIGBUS
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_BUS,
+        /**
+         * SIGFPE
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_FPE,
+        /**
+         * SIGKILL
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_KILL,
+        /**
+         * SIGUSR1
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_USR1,
+        /**
+         * SIGSEGV
+         */
+        VR_DOMAIN_PROCESS_SIGNAL_SEGV,
+        /**
+         * SIGUSR2
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_USR2,
+        /**
+         * SIGPIPE
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_PIPE,
+        /**
+         * SIGALRM
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_ALRM,
+        /**
+         * SIGTERM
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_TERM,
+        /**
+         * Not in POSIX (SIGSTKFLT on Linux )
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_STKFLT,
+        /**
+         * SIGCHLD
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_CHLD,
+        /**
+         * SIGCONT
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_CONT,
+        /**
+         * SIGSTOP
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_STOP,
+        /**
+         * SIGTSTP
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_TSTP,
+        /**
+         * SIGTTIN
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_TTIN,
+        /**
+         * SIGTTOU
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_TTOU,
+        /**
+         * SIGURG
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_URG,
+        /**
+         * SIGXCPU
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_XCPU,
+        /**
+         * SIGXFSZ
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_XFSZ,
+        /**
+         * SIGVTALRM
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_VTALRM,
+        /**
+         * SIGPROF
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_PROF,
+        /**
+         * Not in POSIX (SIGWINCH on Linux)
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_WINCH,
+        /**
+         * SIGPOLL (also known as SIGIO on Linux)
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_POLL,
+        /**
+         * Not in POSIX (SIGPWR on Linux)
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_PWR,
+        /**
+         * SIGSYS (also known as SIGUNUSED on Linux)
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_SYS,
+        /**
+         * SIGRTMIN
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT0,
+        /**
+         * SIGRTMIN + 1
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT1,
+        /**
+         * SIGRTMIN + 2
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT2,
+        /**
+         * SIGRTMIN + 3
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT3,
+        /**
+         * SIGRTMIN + 4
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT4,
+        /**
+         * SIGRTMIN + 5
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT5,
+        /**
+         * SIGRTMIN + 6
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT6,
+        /**
+         * SIGRTMIN + 7
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT7,
+        /**
+         * SIGRTMIN + 8
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT8,
+        /**
+         * SIGRTMIN + 9
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT9,
+        /**
+         * SIGRTMIN + 10
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT10,
+        /**
+         * SIGRTMIN + 11
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT11,
+        /**
+         * SIGRTMIN + 12
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT12,
+        /**
+         * SIGRTMIN + 13
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT13,
+        /**
+         * SIGRTMIN + 14
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT14,
+        /**
+         * SIGRTMIN + 15
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT15,
+        /**
+         * SIGRTMIN + 16
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT16,
+        /**
+         * SIGRTMIN + 17
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT17,
+        /**
+         * SIGRTMIN + 18
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT18,
+        /**
+         * SIGRTMIN + 19
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT19,
+        /**
+         * SIGRTMIN + 20
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT20,
+        /**
+         * SIGRTMIN + 21
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT21,
+        /**
+         * SIGRTMIN + 22
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT22,
+        /**
+         * SIGRTMIN + 23
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT23,
+        /**
+         * SIGRTMIN + 24
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT24,
+        /**
+         * SIGRTMIN + 25
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT25,
+        /**
+         * SIGRTMIN + 26
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT26,
+        /**
+         * SIGRTMIN + 27
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT27,
+        /**
+         * SIGRTMIN + 28
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT28,
+        /**
+         * SIGRTMIN + 29
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT29,
+        /**
+         * SIGRTMIN + 30
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT30,
+        /**
+         * SIGRTMIN + 31
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT31,
+        /**
+         * SIGRTMIN + 32 / SIGRTMAX
+         */
+        VIR_DOMAIN_PROCESS_SIGNAL_RT32
+    }
+
+    public static enum virDomainEventType {
+        VIR_DOMAIN_EVENT_DEFINED,
+        VIR_DOMAIN_EVENT_UNDEFINED,
+        VIR_DOMAIN_EVENT_STARTED,
+        VIR_DOMAIN_EVENT_SUSPENDED,
+        VIR_DOMAIN_EVENT_RESUMED,
+        VIR_DOMAIN_EVENT_STOPPED,
+        VIR_DOMAIN_EVENT_SHUTDOWN,
+        VIR_DOMAIN_EVENT_PMSUSPENDED,
+        VIR_DOMAIN_EVENT_CRASHED
+    }
+
+    public static enum virDomainEventDefinedDetailType {
+        /**
+         * Newly created config file
+         */
+        VIR_DOMAIN_EVENT_DEFINED_ADDED,
+        /**
+         * Changed config file
+         */
+        VIR_DOMAIN_EVENT_DEFINED_UPDATED,
+        /**
+         * Domain was renamed
+         */
+        VIR_DOMAIN_EVENT_DEFINED_RENAMED
+    }
+
+    public static enum virDomainEventUndefinedDetailType {
+        /**
+         * Deleted the config file
+         */
+        VIR_DOMAIN_EVENT_UNDEFINED_REMOVED,
+        /**
+         * Domain was renamed
+         */
+        VIR_DOMAIN_EVENT_UNDEFINED_RENAMED
+    }
+
+    public static enum virDomainEventStartedDetailType {
+        /**
+         * Normal startup from boot
+         */
+        VIR_DOMAIN_EVENT_STARTED_BOOTED,
+        /**
+         * Incoming migration from another host
+         */
+        VIR_DOMAIN_EVENT_STARTED_MIGRATED,
+        /**
+         * Restored from a state file
+         */
+        VIR_DOMAIN_EVENT_STARTED_RESTORED,
+        /**
+         * Restored from snapshot
+         */
+        VIR_DOMAIN_EVENT_STARTED_FROM_SNAPSHOT,
+        /**
+         * Started due to wakeup event
+         */
+        VIR_DOMAIN_EVENT_STARTED_WAKEUP
+    }
+
+    public static enum virDomainEventSuspendedDetailType {
+        /**
+         * Normal suspend due to admin pause
+         */
+        VIR_DOMAIN_EVENT_SUSPENDED_PAUSED,
+        /**
+         * Suspended for offline migration
+         */
+        VIR_DOMAIN_EVENT_SUSPENDED_MIGRATED,
+        /**
+         * Suspended due to a disk I/O error
+         */
+        VIR_DOMAIN_EVENT_SUSPENDED_IOERROR,
+        /**
+         * Suspended due to a watchdog firing
+         */
+        VIR_DOMAIN_EVENT_SUSPENDED_WATCHDOG,
+        /**
+         * Restored from paused state file
+         */
+        VIR_DOMAIN_EVENT_SUSPENDED_RESTORED,
+        /**
+         * Restored from paused snapshot
+         */
+        VIR_DOMAIN_EVENT_SUSPENDED_FROM_SNAPSHOT,
+        /**
+         * suspended after failure during libvirt API call
+         */
+        VIR_DOMAIN_EVENT_SUSPENDED_API_ERROR
+    }
+
+    public static enum virDomainEventResumedDetailType {
+        /**
+         * Normal resume due to admin unpause
+         */
+        VIR_DOMAIN_EVENT_RESUMED_UNPAUSED,
+        /**
+         * Resumed for completion of migration
+         */
+        VIR_DOMAIN_EVENT_RESUMED_MIGRATED,
+        /**
+         * Resumed from snapshot
+         */
+        VIR_DOMAIN_EVENT_RESUMED_FROM_SNAPSHOT
+    }
+
+    public static enum virDomainEventStoppedDetailType {
+        /**
+         * Normal shutdown
+         */
+        VIR_DOMAIN_EVENT_STOPPED_SHUTDOWN,
+        /**
+         * Forced poweroff from host
+         */
+        VIR_DOMAIN_EVENT_STOPPED_DESTROYED,
+        /**
+         * Guest crashed
+         */
+        VIR_DOMAIN_EVENT_STOPPED_CRASHED,
+        /**
+         * Migrated off to another host
+         */
+        VIR_DOMAIN_EVENT_STOPPED_MIGRATED,
+        /**
+         * Saved to a state file
+         */
+        VIR_DOMAIN_EVENT_STOPPED_SAVED,
+        /**
+         * Host emulator/mgmt failed
+         */
+        VIR_DOMAIN_EVENT_STOPPED_FAILED,
+        /**
+         * offline snapshot loaded
+         */
+        VIR_DOMAIN_EVENT_STOPPED_FROM_SNAPSHOT
+    }
+
+    public static enum virDomainEventShutdownDetailType {
+        /**
+         * Guest finished shutdown sequence
+         */
+        VIR_DOMAIN_EVENT_SHUTDOWN_FINISHED
+    }
+
+    public static enum virDomainEventPMSuspendedDetailType {
+        /**
+         * Guest was PM suspended to memory
+         */
+        VIR_DOMAIN_EVENT_PMSUSPENDED_MEMORY,
+        /**
+         * Guest was PM suspended to disk
+         */
+        VIR_DOMAIN_EVENT_PMSUSPENDED_DISK
+    }
+
+    public static enum virDomainEventCrashedDetailType {
+        /**
+         * Guest was panicked
+         */
+        VIR_DOMAIN_EVENT_CRASHED_PANICKED
+    }
+
+    public static enum virDomainJobType {
+        /**
+         * No job is active
+         */
+        VIR_DOMAIN_JOB_NONE,
+        /**
+         * Job with a finite completion time
+         */
+        VIR_DOMAIN_JOB_BOUNDED,
+        /**
+         * Job without a finite completion time
+         */
+        VIR_DOMAIN_JOB_UNBOUNDED,
+        /**
+         * Job has finished, but isn't cleaned up
+         */
+        VIR_DOMAIN_JOB_COMPLETED,
+        /**
+         * Job hit error, but isn't cleaned up
+         */
+        VIR_DOMAIN_JOB_FAILED,
+        /**
+         * Job was aborted, but isn't cleaned up
+         */
+        VIR_DOMAIN_JOB_CANCELLED
+    }
+
+    public static final class virDomainGetJobStatsFlags {
+        /**
+         * return stats of a recently completed job
+         */
+        public static final int VIR_DOMAIN_JOB_STATS_COMPLETED = (1 << 0);
+    }
+
+
+    public static enum virDomainEventWatchdogAction {
+        /**
+         * No action, watchdog ignored
+         */
+        VIR_DOMAIN_EVENT_WATCHDOG_NONE,
+        /**
+         * Guest CPUs are paused
+         */
+        VIR_DOMAIN_EVENT_WATCHDOG_PAUSE,
+        /**
+         * Guest CPUs are reset
+         */
+        VIR_DOMAIN_EVENT_WATCHDOG_RESET,
+        /**
+         * Guest is forcibly powered off
+         */
+        VIR_DOMAIN_EVENT_WATCHDOG_POWEROFF,
+        /**
+         * Guest is requested to gracefully shutdown
+         */
+        VIR_DOMAIN_EVENT_WATCHDOG_SHUTDOWN,
+        /**
+         * No action, a debug message logged
+         */
+        VIR_DOMAIN_EVENT_WATCHDOG_DEBUG,
+        /**
+         * Inject a non-maskable interrupt into guest
+         */
+        VIR_DOMAIN_EVENT_WATCHDOG_INJECTNMI
+    }
+
+    public static enum virDomainEventIOErrorAction {
+        /**
+         * No action, IO error ignored
+         */
+        VIR_DOMAIN_EVENT_IO_ERROR_NONE,
+        /**
+         * Guest CPUs are paused
+         */
+        VIR_DOMAIN_EVENT_IO_ERROR_PAUSE,
+        /**
+         * IO error reported to guest OS
+         */
+        VIR_DOMAIN_EVENT_IO_ERROR_REPORT
+    }
+
+    public static enum virDomainEventGraphicsPhase {
+        /**
+         * Initial socket connection established
+         */
+        VIR_DOMAIN_EVENT_GRAPHICS_CONNECT,
+        /**
+         * Authentication & setup completed
+         */
+        VIR_DOMAIN_EVENT_GRAPHICS_INITIALIZE,
+        /**
+         * Final socket disconnection
+         */
+        VIR_DOMAIN_EVENT_GRAPHICS_DISCONNECT
+    }
+
+    public static enum virDomainEventGraphicsAddressType {
+        /**
+         * IPv4 address
+         */
+        VIR_DOMAIN_EVENT_GRAPHICS_ADDRESS_IPV4,
+        /**
+         * IPv6 address
+         */
+        VIR_DOMAIN_EVENT_GRAPHICS_ADDRESS_IPV6,
+        /**
+         * UNIX socket path
+         */
+        VIR_DOMAIN_EVENT_GRAPHICS_ADDRESS_UNIX
+    }
+
+    public static enum virConnectDomainEventBlockJobStatus {
+        VIR_DOMAIN_BLOCK_JOB_COMPLETED,
+        VIR_DOMAIN_BLOCK_JOB_FAILED,
+        VIR_DOMAIN_BLOCK_JOB_CANCELED,
+        VIR_DOMAIN_BLOCK_JOB_READY
+    }
+
+    public static enum virConnectDomainEventDiskChangeReason {
+        /**
+         * oldSrcPath is set
+         */
+        VIR_DOMAIN_EVENT_DISK_CHANGE_MISSING_ON_START,
+        VIR_DOMAIN_EVENT_DISK_DROP_MISSING_ON_START
+    }
+
+    public static enum virDomainEventTrayChangeReason {
+        VIR_DOMAIN_EVENT_TRAY_CHANGE_OPEN,
+        VIR_DOMAIN_EVENT_TRAY_CHANGE_CLOSE,
+    }
+
+    public static enum virConnectDomainEventAgentLifecycleState {
+        /**
+         * agent connected
+         */
+        VIR_CONNECT_DOMAIN_EVENT_AGENT_LIFECYCLE_STATE_CONNECTED,
+        /**
+         * agent disconnected
+         */
+        VIR_CONNECT_DOMAIN_EVENT_AGENT_LIFECYCLE_STATE_DISCONNECTED
+    }
+
+    public static enum virConnectDomainEventAgentLifecycleReason {
+        /**
+         * unknown state change reason
+         */
+        VIR_CONNECT_DOMAIN_EVENT_AGENT_LIFECYCLE_REASON_UNKNOWN,
+        /**
+         * state changed due to domain start
+         */
+        VIR_CONNECT_DOMAIN_EVENT_AGENT_LIFECYCLE_REASON_DOMAIN_STARTED,
+        /**
+         * channel state changed
+         */
+        VIR_CONNECT_DOMAIN_EVENT_AGENT_LIFECYCLE_REASON_CHANNEL
+
+    }
+
+    public static enum virDomainEventID {
+        /**
+         * virConnectDomainEventCallback
+         */
+        VIR_DOMAIN_EVENT_ID_LIFECYCLE,
+        /**
+         * virConnectDomainEventGenericCallback
+         */
+        VIR_DOMAIN_EVENT_ID_REBOOT,
+        /**
+         * virConnectDomainEventRTCChangeCallback
+         */
+        VIR_DOMAIN_EVENT_ID_RTC_CHANGE,
+        /**
+         * virConnectDomainEventWatchdogCallback
+         */
+        VIR_DOMAIN_EVENT_ID_WATCHDOG,
+        /**
+         * virConnectDomainEventIOErrorCallback
+         */
+        VIR_DOMAIN_EVENT_ID_IO_ERROR,
+        /**
+         * virConnectDomainEventGraphicsCallback
+         */
+        VIR_DOMAIN_EVENT_ID_GRAPHICS,
+        /**
+         * virConnectDomainEventIOErrorReasonCallback
+         */
+        VIR_DOMAIN_EVENT_ID_IO_ERROR_REASON,
+        /**
+         * virConnectDomainEventGenericCallback
+         */
+        VIR_DOMAIN_EVENT_ID_CONTROL_ERROR,
+        /**
+         * virConnectDomainEventBlockJobCallback
+         */
+        VIR_DOMAIN_EVENT_ID_BLOCK_JOB,
+        /**
+         * virConnectDomainEventDiskChangeCallback
+         */
+        VIR_DOMAIN_EVENT_ID_DISK_CHANGE,
+        /**
+         * virConnectDomainEventTrayChangeCallback
+         */
+        VIR_DOMAIN_EVENT_ID_TRAY_CHANGE,
+        /**
+         * virConnectDomainEventPMWakeupCallback
+         */
+        VIR_DOMAIN_EVENT_ID_PMWAKEUP,
+        /**
+         * virConnectDomainEventPMSuspendCallback
+         */
+        VIR_DOMAIN_EVENT_ID_PMSUSPEND,
+        /**
+         * virConnectDomainEventBalloonChangeCallback
+         */
+        VIR_DOMAIN_EVENT_ID_BALLOON_CHANGE,
+        /**
+         * virConnectDomainEventPMSuspendDiskCallback
+         */
+        VIR_DOMAIN_EVENT_ID_PMSUSPEND_DISK,
+        /**
+         * virConnectDomainEventDeviceRemovedCallback
+         */
+        VIR_DOMAIN_EVENT_ID_DEVICE_REMOVED,
+        /**
+         * virConnectDomainEventBlockJobCallback
+         */
+        VIR_DOMAIN_EVENT_ID_BLOCK_JOB_2,
+        /**
+         * virConnectDomainEventTunableCallback
+         */
+        VIR_DOMAIN_EVENT_ID_TUNABLE,
+        /**
+         * virConnectDomainEventAgentLifecycleCallback
+         */
+        VIR_DOMAIN_EVENT_ID_AGENT_LIFECYCLE,
+        /**
+         * virConnectDomainEventDeviceAddedCallback
+         */
+        VIR_DOMAIN_EVENT_ID_DEVICE_ADDED
+    }
+
+    public static final class virDomainConsoleFlags {
+        /**
+         * abort a (possibly) active console connection to force a new connection
+         */
+        public static final int VIR_DOMAIN_CONSOLE_FORCE = (1 << 0);
+        /**
+         * check if the console driver supports safe console operations
+         */
+        public static final int VIR_DOMAIN_CONSOLE_SAFE  = (1 << 1);
+    }
+
+    public static final class virDomainChannelFlags {
+        /**
+         * abort a (possibly) active channel connection to force a new connection
+         */
+        public static final int VIR_DOMAIN_CHANNEL_FORCE = (1 << 0);
+    }
+
+    public static final class virDomainOpenGraphicsFlags {
+        public static final int VIR_DOMAIN_OPEN_GRAPHICS_SKIPAUTH = (1 << 0);
+    }
+
+    public static final class virDomainSetTimeFlags {
+        /**
+         * Re-sync domain time from domain's RTC
+         */
+        public static final int VIR_DOMAIN_TIME_SYNC = (1 << 0);
+    }
+
+    public static enum virSchedParameterType {
+        VIR_DOMAIN_SCHED_FIELD_INT,
+        VIR_DOMAIN_SCHED_FIELD_UINT,
+        VIR_DOMAIN_SCHED_FIELD_LLONG,
+        VIR_DOMAIN_SCHED_FIELD_ULLONG,
+        VIR_DOMAIN_SCHED_FIELD_DOUBLE,
+        VIR_DOMAIN_SCHED_FIELD_BOOLEAN
+    }
+
+    public static enum virBlkioParameterType {
+        VIR_DOMAIN_BLKIO_PARAM_INT,
+        VIR_DOMAIN_BLKIO_PARAM_UINT,
+        VIR_DOMAIN_BLKIO_PARAM_LLONG,
+        VIR_DOMAIN_BLKIO_PARAM_ULLONG,
+        VIR_DOMAIN_BLKIO_PARAM_DOUBLE,
+        VIR_DOMAIN_BLKIO_PARAM_BOOLEAN,
+    }
+
+    public static enum virMemoryParameterType {
+        VIR_DOMAIN_MEMORY_PARAM_INT,
+        VIR_DOMAIN_MEMORY_PARAM_UINT,
+        VIR_DOMAIN_MEMORY_PARAM_LLONG,
+        VIR_DOMAIN_MEMORY_PARAM_ULLONG,
+        VIR_DOMAIN_MEMORY_PARAM_DOUBLE,
+        VIR_DOMAIN_MEMORY_PARAM_BOOLEAN
+    }
+
+    public static enum virDomainInterfaceAddressesSource {
+        /**
+         * Parse DHCP lease file
+         */
+        VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE,
+        /**
+         * Query qemu guest agent
+         */
+        VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT
+    }
+
+    public static final class virDomainSetUserPasswordFlags {
+        /**
+         * the password is already encrypted
+         */
+        public static final int VIR_DOMAIN_PASSWORD_ENCRYPTED = (1 << 0);
+    }
+
 
     /**
      * the native virDomainPtr.
@@ -171,7 +1647,7 @@ public class Domain {
         final int prime = 31;
         int result = 1;
         result = prime * result
-            + ((virConnect == null) ? 0 : virConnect.hashCode());
+                + ((virConnect == null) ? 0 : virConnect.hashCode());
         try {
             result = prime * result + ((VDP == null) ? 0 : Arrays.hashCode(this.getUUID()));
         } catch (LibvirtException e) {
@@ -988,7 +2464,7 @@ public class Domain {
      */
     public Domain migrate(Connect dconn, long flags, String dxml, String dname, String uri, long bandwidth) throws LibvirtException {
         DomainPointer newPtr =
-            processError(libvirt.virDomainMigrate2(VDP, dconn.VCP, dxml, new NativeLong(flags), dname, uri, new NativeLong(bandwidth)));
+                processError(libvirt.virDomainMigrate2(VDP, dconn.VCP, dxml, new NativeLong(flags), dname, uri, new NativeLong(bandwidth)));
         return new Domain(dconn, newPtr);
     }
 
@@ -1089,8 +2565,8 @@ public class Domain {
      */
     public int migrateToURI(String dconnuri, String miguri, String dxml, long flags, String dname, long bandwidth) throws LibvirtException {
         return processError(libvirt.virDomainMigrateToURI2(VDP, dconnuri, miguri,
-                                                           dxml, new NativeLong(flags),
-                                                           dname, new NativeLong(bandwidth)));
+                dxml, new NativeLong(flags),
+                dname, new NativeLong(bandwidth)));
     }
 
     /**
@@ -1392,7 +2868,7 @@ public class Domain {
      */
     public void sendKey(KeycodeSet codeset, int holdtime, int... keys) throws LibvirtException {
         processError(libvirt.virDomainSendKey(this.VDP, codeset.ordinal(),
-                                              holdtime, keys, keys.length, 0));
+                holdtime, keys, keys.length, 0));
     }
 
     /**
@@ -1553,7 +3029,7 @@ public class Domain {
      * @param flags
      *            flags for undefining the domain. See virDomainUndefineFlagsValues for more information
      * @throws LibvirtException
-    */
+     */
     public void undefine(int flags) throws LibvirtException {
         processError(libvirt.virDomainUndefineFlags(VDP, flags));
     }
