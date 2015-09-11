@@ -304,7 +304,6 @@ public interface Libvirt extends Library {
     int virDomainGetUUIDString(DomainPointer virDomainPtr, byte[] uuidString);
     int virDomainGetVcpus(DomainPointer virDomainPtr, virVcpuInfo[] info, int maxInfo, byte[] cpumaps, int maplen);
     CString virDomainGetXMLDesc(DomainPointer virDomainPtr, int flags);
-    int virDomainHasCurrentSnapshot(DomainPointer virDomainPtr, int flags);
     int virDomainHasManagedSaveImage(DomainPointer virDomainPtr, int flags);
     int virDomainInterfaceStats(DomainPointer virDomainPtr, String path, virDomainInterfaceStats stats, SizeT size);
     int virDomainIsActive(DomainPointer virDomainPtr);
@@ -334,7 +333,6 @@ public interface Libvirt extends Library {
     int virDomainRef(DomainPointer virDomainPtr);
     int virDomainReset(DomainPointer virDomainPtr, int flags);
     int virDomainRestore(ConnectionPointer virConnectPtr, String from);
-    int virDomainRevertToSnapshot(DomainSnapshotPointer virDomainSnapshotPtr, int flags);
     int virDomainResume(DomainPointer virDomainPtr);
     int virDomainSave(DomainPointer virDomainPtr, String to);
     int virDomainSendKey(DomainPointer virDomainPtr, int codeset, int holdtime, int[] keycodes, int nkeycodes, int flags);
@@ -480,15 +478,30 @@ public interface Libvirt extends Library {
     int virStreamRecv(StreamPointer virStreamPtr, ByteBuffer data, SizeT length);
     int virStreamRecvAll(StreamPointer virStreamPtr, Libvirt.VirStreamSinkFunc handler, Pointer opaque);
 
-    //DomainSnapshot Methods
-    DomainSnapshotPointer virDomainSnapshotCreateXML(DomainPointer virDomainPtr, String xmlDesc, int flags);
-    DomainSnapshotPointer virDomainSnapshotCurrent(DomainPointer virDomainPtr, int flags);
-    int virDomainSnapshotDelete(DomainSnapshotPointer virDomainSnapshotPtr, int flags);
-    CString virDomainSnapshotGetXMLDesc(DomainSnapshotPointer virDomainSnapshotPtr, int flags);
-    int virDomainSnapshotFree(DomainSnapshotPointer virDomainSnapshotPtr);
-    int virDomainSnapshotListNames(DomainPointer virDomainPtr, CString[] names, int nameslen, int flags);
-    DomainSnapshotPointer virDomainSnapshotLookupByName(DomainPointer virDomainPtr, String name, int flags);
+    /**
+     * libvirt-domain-snapshot.h method bindings.
+     */
+    String virDomainSnapshotGetName(DomainSnapshotPointer snapshot);
+    DomainPointer virDomainSnapshotGetDomain(DomainSnapshotPointer snapshot);
+    ConnectionPointer virDomainSnapshotGetConnect(DomainSnapshotPointer snapshot);
+    DomainSnapshotPointer virDomainSnapshotCreateXML(DomainPointer domain, String xmlDesc, int flags);
+    CString virDomainSnapshotGetXMLDesc(DomainSnapshotPointer snapshot, int flags);
     int virDomainSnapshotNum(DomainPointer virDomainPtr, int flags);
+    int virDomainSnapshotListNames(DomainPointer virDomainPtr, CString[] names, int nameslen, int flags);
+    int virDomainListAllSnapshots(DomainPointer domain, DomainSnapshotPointer[] snaps, int flags);
+    int virDomainSnapshotNumChildren(DomainSnapshotPointer snapshot, int flags);
+    int virDomainSnapshotListChildrenNames(DomainSnapshotPointer snapshot, CString[] names, int nameslen, int flags);
+    int virDomainSnapshotListAllChildren(DomainSnapshotPointer snapshot, DomainSnapshotPointer[] snaps, int flags);
+    DomainSnapshotPointer virDomainSnapshotLookupByName(DomainPointer domain, String name, int flags);
+    int virDomainHasCurrentSnapshot(DomainPointer domain, int flags);
+    DomainSnapshotPointer virDomainSnapshotCurrent(DomainPointer virDomainPtr, int flags);
+    DomainSnapshotPointer virDomainSnapshotGetParent(DomainSnapshotPointer snapshot, int flags);
+    int virDomainSnapshotIsCurrent(DomainSnapshotPointer snapshot, int flags);
+    int virDomainSnapshotHasMetadata(DomainSnapshotPointer snapshot, int flags);
+    int virDomainRevertToSnapshot(DomainSnapshotPointer snapshot, int flags);
+    int virDomainSnapshotDelete(DomainSnapshotPointer snapshot, int flags);
+    int virDomainSnapshotRef(DomainSnapshotPointer snapshot);
+    int virDomainSnapshotFree(DomainSnapshotPointer snapshot);
 
     // Network Filter Methods
     CString virNWFilterGetXMLDesc(NetworkFilterPointer virNWFilterPtr, int flags);
