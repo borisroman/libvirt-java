@@ -37,6 +37,41 @@ import java.util.Arrays;
  */
 public class Domain {
 
+    public static enum virDomainState {
+        /**
+         * no state
+         */
+        VIR_DOMAIN_NOSTATE,
+        /**
+         * the domain is running
+         */
+        VIR_DOMAIN_RUNNING,
+        /**
+         * the domain is blocked on resource
+         */
+        VIR_DOMAIN_BLOCKED,
+        /**
+         * the domain is paused by user
+         */
+        VIR_DOMAIN_PAUSED,
+        /**
+         * the domain is being shut down
+         */
+        VIR_DOMAIN_SHUTDOWN,
+        /**
+         * the domain is shut off
+         */
+        VIR_DOMAIN_SHUTOFF,
+        /**
+         * the domain is crashed
+         */
+        VIR_DOMAIN_CRASHED,
+        /**
+         * the domain is suspended by guest power management
+         */
+        VIR_DOMAIN_PMSUSPENDED
+    }
+
     public static final class BlockResizeFlags {
         /**
          * size is in bytes instead of KiB

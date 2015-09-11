@@ -1,5 +1,6 @@
 package org.libvirt;
 
+import org.libvirt.Domain.virDomainState;
 import org.libvirt.jna.virDomainInfo;
 
 /**
@@ -9,50 +10,11 @@ import org.libvirt.jna.virDomainInfo;
  *
  */
 public class DomainInfo {
-    /**
-     * @author stoty
-     *
-     */
-    public static enum DomainState {
-        /**
-         * no state
-         */
-        VIR_DOMAIN_NOSTATE,
-        /**
-         * the domain is running
-         */
-        VIR_DOMAIN_RUNNING,
-        /**
-         * the domain is blocked on resource
-         */
-        VIR_DOMAIN_BLOCKED,
-        /**
-         * the domain is paused by user
-         */
-        VIR_DOMAIN_PAUSED,
-        /**
-         * the domain is being shut down
-         */
-        VIR_DOMAIN_SHUTDOWN,
-        /**
-         * the domain is shut off
-         */
-        VIR_DOMAIN_SHUTOFF,
-        /**
-         * the domain is crashed
-         */
-        VIR_DOMAIN_CRASHED,
-        /**
-         * the domain is suspended by guest power management
-         */
-        VIR_DOMAIN_PMSUSPENDED
-        
-    }
 
     /**
      * the running state, one of virDomainFlag
      */
-    public DomainState state;
+    public virDomainState state;
     /**
      * the maximum memory in KBytes allowed
      */
@@ -80,7 +42,7 @@ public class DomainInfo {
         maxMem = info.maxMem.longValue();
         memory = info.memory.longValue();
         nrVirtCpu = info.nrVirtCpu;
-        state = DomainState.values()[info.state];
+        state = virDomainState.values()[info.state];
     }
 
     @Override
