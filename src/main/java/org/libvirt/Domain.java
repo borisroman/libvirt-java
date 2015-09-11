@@ -72,6 +72,10 @@ public class Domain {
         VIR_DOMAIN_PMSUSPENDED
     }
 
+    public static enum virDomainNostateReason {
+        VIR_DOMAIN_NOSTATE_UNKNOWN
+    }
+
     public static final class BlockResizeFlags {
         /**
          * size is in bytes instead of KiB
