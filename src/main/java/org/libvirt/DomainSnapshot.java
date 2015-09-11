@@ -31,6 +31,72 @@ public class DomainSnapshot {
                                                                                while the guest is
                                                                                running */
     }
+    
+    /**
+     * virDomainSnapshotListFlags:
+     *
+     * Flags valid for virDomainSnapshotNum(),
+     * virDomainSnapshotListNames(), virDomainSnapshotNumChildren(), and
+     * virDomainSnapshotListChildrenNames(), virDomainListAllSnapshots(),
+     * and virDomainSnapshotListAllChildren().  Note that the interpretation
+     * of flag (1<<0) depends on which function it is passed to; but serves
+     * to toggle the per-call default of whether the listing is shallow or
+     * recursive.  Remaining bits come in groups; if all bits from a group are
+     * 0, then that group is not used to filter results.  
+     */
+    static final class virDomainSnapshotListFlags {
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_ROOTS       = (1 << 0); /* Filter by snapshots
+                                                            with no parents, when
+                                                            listing a domain */
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_DESCENDANTS = (1 << 0); /* List all descendants,
+                                                            not just children, when
+                                                            listing a snapshot */
+
+        /* For historical reasons, groups do not use contiguous bits.  */
+
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_LEAVES      = (1 << 2); /* Filter by snapshots
+                                                            with no children */
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_NO_LEAVES   = (1 << 3); /* Filter by snapshots
+                                                            that have children */
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_METADATA    = (1 << 1); /* Filter by snapshots
+                                                            which have metadata */
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_NO_METADATA = (1 << 4); /* Filter by snapshots
+                                                            with no metadata */
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_INACTIVE    = (1 << 5); /* Filter by snapshots
+                                                            taken while guest was
+                                                            shut off */
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_ACTIVE      = (1 << 6); /* Filter by snapshots
+                                                            taken while guest was
+                                                            active, and with
+                                                            memory state */
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_DISK_ONLY   = (1 << 7); /* Filter by snapshots
+                                                            taken while guest was
+                                                            active, but without
+                                                            memory state */
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_INTERNAL    = (1 << 8); /* Filter by snapshots
+                                                            stored internal to
+                                                            disk images */
+        static final int VIR_DOMAIN_SNAPSHOT_LIST_EXTERNAL    = (1 << 9); /* Filter by snapshots
+                                                            that use files external
+                                                            to disk images */
+    }
+    
+
+    static final class virDomainSnapshotRevertFlags {
+        static final int VIR_DOMAIN_SNAPSHOT_REVERT_RUNNING = (1 << 0); /* Run after revert */
+        static final int VIR_DOMAIN_SNAPSHOT_REVERT_PAUSED  = (1 << 1); /* Pause after revert */
+        static final int VIR_DOMAIN_SNAPSHOT_REVERT_FORCE   = (1 << 2); /* Allow risky reverts */
+    }
+
+
+    /**
+     *  Delete a snapshot
+     */
+    static final class virDomainSnapshotDeleteFlags {
+        static final int VIR_DOMAIN_SNAPSHOT_DELETE_CHILDREN      = (1 << 0); /* Also delete children */
+        static final int VIR_DOMAIN_SNAPSHOT_DELETE_METADATA_ONLY = (1 << 1); /* Delete just metadata */
+        static final int VIR_DOMAIN_SNAPSHOT_DELETE_CHILDREN_ONLY = (1 << 2); /* Delete just children */
+    }
 
     /**
      * the native virDomainSnapshotPtr.
