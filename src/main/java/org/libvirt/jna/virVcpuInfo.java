@@ -9,10 +9,21 @@ import com.sun.jna.Structure;
  * JNA mapping for the virVcpuInfo structure
  */
 public class virVcpuInfo extends Structure {
+    /**
+     * Virtual CPU number
+     */
     public int number;
+    /**
+     * Value from virVcpuState
+     */
     public int state;
-    public long cpuTime; // this is a long long in the code, so a long mapping
-    // is correct
+    /**
+     * CPU time used, in nanoseconds
+     */
+    public long cpuTime;
+    /**
+     * Real CPU number, or -1 if offline
+     */
     public int cpu;
 
     private static final List<String> fields = Arrays.asList(
