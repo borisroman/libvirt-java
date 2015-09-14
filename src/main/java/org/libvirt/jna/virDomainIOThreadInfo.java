@@ -6,7 +6,7 @@ import java.util.List;
 import com.sun.jna.Structure;
 
 /**
- * JNA mapping for the virDomainInterfaceStats structure
+ * JNA mapping for the virDomainIOThreadInfo structure
  */
 public class virDomainIOThreadInfo extends Structure {
     /**
