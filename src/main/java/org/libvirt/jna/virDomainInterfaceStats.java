@@ -9,22 +9,41 @@ import com.sun.jna.Structure;
  * JNA mapping for the virDomainInterfaceStats structure
  */
 public class virDomainInterfaceStats extends Structure {
-    public long rx_bytes; // this is a long long in the code, so a long mapping
-    // is correct
-    public long rx_packets; // this is a long long in the code, so a long
-    // mapping is correct
-    public long rx_errs; // this is a long long in the code, so a long mapping
-    // is correct
-    public long rx_drop; // this is a long long in the code, so a long mapping
-    // is correct
-    public long tx_bytes; // this is a long long in the code, so a long mapping
-    // is correct
-    public long tx_packets; // this is a long long in the code, so a long
-    // mapping is correct
-    public long tx_errs; // this is a long long in the code, so a long mapping
-    // is correct
-    public long tx_drop; // this is a long long in the code, so a long mapping
-    // is correct
+    /**
+     * This is a long long in the code, so a long mapping is correct
+     */
+    public long rx_bytes;
+    /**
+     * This is a long long in the code, so a long mapping is correct
+     */
+    public long rx_packets;
+    /**
+     * This is a long long in the code, so a long mapping is correct
+     */
+    public long rx_errs;
+    /**
+     * This is a long long in the code, so a long mapping is correct
+     */
+    public long rx_drop;
+    /**
+     * This is a long long in the code, so a long mapping is correct
+     */
+    public long tx_bytes;
+    /**
+     * This is a long long in the code, so a long mapping is correct
+     */
+    public long tx_packets;
+    /**
+     * This is a long long in the code, so a long mapping is correct
+     */
+    public long tx_errs;
+    /**
+     * This is a long long in the code, so a long mapping is correct
+     */
+    public long tx_drop;
+    /**
+     * This is a long long in the code, so a long mapping is correct
+     */
 
     private static final List<String> fields = Arrays.asList(
             "rx_bytes", "rx_packets", "rx_errs", "rx_drop",
